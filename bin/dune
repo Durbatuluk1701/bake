@@ -1,4 +1,4 @@
 (executable
  (public_name bake)
  (name bake)
- (libraries bake))
+ (libraries bake logs logs.fmt))

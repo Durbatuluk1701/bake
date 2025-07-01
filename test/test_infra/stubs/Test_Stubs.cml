@@ -1,0 +1,12 @@
+(* deps: JumpBack $Test_Dep *)
+
+val _ = 
+  let 
+    val _ = print "\nfjdskf\n"
+    val _ = print (cmd_fn "Test")
+    val _ = print "\nfjdskf\n"
+    val _ = print (jump_back ())
+    val _ = print "\nfjdskf\n"
+  in
+    ()
+  end

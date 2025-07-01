@@ -1,9 +1,8 @@
+
 open Printf
 
-let debug_print msg =
-  match Sys.getenv_opt "DEBUG" with
-  | Some _ -> print_endline msg
-  | None -> ()
+let debug_print str =
+  Logs.debug (fun m -> m "[DEBUG]: %s" str)
 
 let stub_suffixes = ["_Stubs.cml"; "_Axioms.cml"]
 
@@ -24,9 +23,9 @@ let should_subst file_path stubs_dir =
 
 
 let validate_file file_path =
-  if not (Sys.file_exists file_path) then invalid_arg (sprintf "File '%s' does not exist." file_path);
-  try let _ = open_in file_path in file_path with _ -> invalid_arg (sprintf "File '%s' is not readable." file_path)
-
+  if not (Sys.file_exists file_path) 
+  then Error (sprintf "File '%s' does not exist." file_path)
+  else Ok file_path
 
 let string_starts_with ~prefix s =
   let plen = String.length prefix in
@@ -134,20 +133,36 @@ let build_mode out_opt deps =
   run_or_fail gcc_cmd ("Error during GCC compilation: " ^ gcc_cmd);
   Printf.printf "Binary created: %s\n" binary_file
 
+
 let () =
+  Logs.set_reporter (Logs_fmt.reporter ());
+  (match Sys.getenv_opt "DEBUG" with
+   | Some _ -> Logs.set_level (Some Logs.Debug)
+   | None -> Logs.set_level (Some Logs.Error));
+
   let main_file = ref "" in
-  let mode = ref "print" in
-  let out = ref None in
+  (* Default to build *)
+  let mode = ref "build" in
+  (* Default output to current directory *)
+  let out = ref (Some ".") in
   let stubs = ref None in
   let speclist = [
     ("--mode", Arg.Symbol (["print"; "merge"; "build"], (fun m -> mode := m)), "Mode of operation: print, merge, build");
     ("--out", Arg.String (fun s -> out := Some s), "Output file name for the monolithic CakeML file");
     ("--stubs", Arg.String (fun s -> stubs := Some s), "Optional folder containing substitute (stub) files");
   ] in
-  let anon_fun fname = main_file := fname in
-  Arg.parse speclist anon_fun "Usage: bake <main> [--mode print|merge|build] [--out <file>] [--stubs <dir>]";
-  main_file := validate_file !main_file;
-  if !main_file = "" then (eprintf "Main CakeML file is required.\n"; exit 1);
+  let usage_str = "Usage: bake <main> [--mode print|merge|build] [--out <file>] [--stubs <dir>]" in
+  let anon_fun fname = 
+    (* Set the main file, which is required for processing *)
+    match validate_file fname with
+    | Error msg -> (* Print usage *)
+      eprintf "Error: %s\n" msg;
+      Arg.usage speclist usage_str;
+      eprintf "Main CakeML file is required.\n";
+      exit 1
+    | Ok fname -> main_file := fname 
+  in
+  Arg.parse speclist anon_fun usage_str;
   let stubs_dir = match !stubs with Some s -> Some s | None -> Sys.getenv_opt "CAKEML_STUBS" in
   let deps = get_trans_deps ~file_path:!main_file ~seen:[] ?stubs_dir ~in_stubs:false () in
   match !mode with
