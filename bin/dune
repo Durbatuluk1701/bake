@@ -1,4 +1,4 @@
 (executable
  (public_name bake)
- (name main)
+ (name bake)
  (libraries bake))
