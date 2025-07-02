@@ -20,3 +20,8 @@
     (cat %{deps})
     ; Write the closing "|}"
     (echo "|}")))))
+
+(install
+ (package bake)
+ (section bin)
+ (files bake.exe))

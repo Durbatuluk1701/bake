@@ -11,7 +11,7 @@
 
 (maintainers "Will Thomas <30wthomas@ku.edu>")
 
-(license LICENSE)
+(license Unlicense)
 
 (documentation https://github.com/Durbatuluk1701/bake)
 
