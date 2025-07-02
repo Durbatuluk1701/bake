@@ -1,4 +1,4 @@
-(* deps: CMD Etc Nat rec_tests.Rec Test_Stubs *)
+(* deps: CMD Etc Nat rec_tests.Rec *)
 
 fun fact i =
   if i < 1 

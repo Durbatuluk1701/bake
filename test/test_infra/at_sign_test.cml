@@ -1,0 +1,11 @@
+(* deps: @_build/default.test/test_infra/Nat  *)
+
+val _ =
+  let 
+    val _ = print (cmd_fn ())
+    val _ = print "\n"
+    val _ = print (nat_fn ())
+    val _ = print "\n"
+  in
+    ()
+  end

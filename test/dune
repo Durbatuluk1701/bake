@@ -1,2 +1,4 @@
-(test
- (name test_bake))
+(cram
+ (deps
+  ../bin/bake.exe
+  (source_tree ./test_infra)))
