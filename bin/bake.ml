@@ -2,7 +2,27 @@
 open Printf
 
 let debug_print str =
-  Logs.debug (fun m -> m "[DEBUG]: %s" str)
+  Logs.debug (fun m -> m "%s" str)
+
+(**
+ * Writes the basis file content of the 'embedded_basis_ffi.c' file to a temporary file
+ * and returns the path to that file.
+ * The temporary file is automatically cleaned up on process exit.
+ *)
+let get_basis_file () : string =
+  let temp_path = Filename.temp_file "embedded_basis_ffi" ".c" in
+  (* Register a cleanup function to delete the file on normal exit. *)
+  at_exit (fun () -> try Sys.remove temp_path with _ -> ());
+  let out_channel = open_out temp_path in
+  try
+    output_string out_channel Basis_c_data.content;
+    close_out out_channel;
+    temp_path
+  with e ->
+    close_out_noerr out_channel;
+    (* Clean up immediately on error *)
+    (try Sys.remove temp_path with _ -> ());
+    raise e
 
 let stub_suffixes = ["_Stubs.cml"; "_Axioms.cml"]
 
@@ -100,7 +120,7 @@ let print_mode out_opt deps =
 
 let merge_mode out_opt deps =
   match out_opt with
-  | None -> failwith "Output file name (--out <file>) is required in 'merge' mode."
+  | None -> failwith "Output file name (--out <file>) is required in 'merge' and 'build' modes."
   | Some out ->
     let oc = open_out out in
     List.iter (fun dep ->
@@ -116,8 +136,7 @@ let merge_mode out_opt deps =
 
 let build_mode out_opt deps =
   let cc = "gcc" in
-  let basis_dir = Filename.dirname (Sys.executable_name) in
-  let basis_file = Filename.concat basis_dir "basis_ffi.c" in
+  let basis_file = get_basis_file () in
   let cc_flags = "-O2 -lm" in
   let out_file = merge_mode out_opt deps in
   let asm_file = Filename.chop_suffix out_file ".cml" ^ ".S" in
@@ -135,16 +154,17 @@ let build_mode out_opt deps =
 
 
 let () =
+  (* Initialize logging *)
   Logs.set_reporter (Logs_fmt.reporter ());
   (match Sys.getenv_opt "DEBUG" with
    | Some _ -> Logs.set_level (Some Logs.Debug)
    | None -> Logs.set_level (Some Logs.Error));
 
-  let main_file = ref "" in
+  let main_file = ref None in
   (* Default to build *)
   let mode = ref "build" in
   (* Default output to current directory *)
-  let out = ref (Some ".") in
+  let out = ref None in
   let stubs = ref None in
   let speclist = [
     ("--mode", Arg.Symbol (["print"; "merge"; "build"], (fun m -> mode := m)), "Mode of operation: print, merge, build");
@@ -152,21 +172,31 @@ let () =
     ("--stubs", Arg.String (fun s -> stubs := Some s), "Optional folder containing substitute (stub) files");
   ] in
   let usage_str = "Usage: bake <main> [--mode print|merge|build] [--out <file>] [--stubs <dir>]" in
+  let print_usage () = Arg.usage speclist usage_str in
+  (* Anonymous function to handle the main file argument *)
+  (* This is required for processing, so it must be provided *)
+  (* If not provided, print usage and exit *)
   let anon_fun fname = 
     (* Set the main file, which is required for processing *)
     match validate_file fname with
     | Error msg -> (* Print usage *)
       eprintf "Error: %s\n" msg;
-      Arg.usage speclist usage_str;
+      print_usage ();
       eprintf "Main CakeML file is required.\n";
       exit 1
-    | Ok fname -> main_file := fname 
+    | Ok fname -> main_file := Some fname 
   in
   Arg.parse speclist anon_fun usage_str;
   let stubs_dir = match !stubs with Some s -> Some s | None -> Sys.getenv_opt "CAKEML_STUBS" in
-  let deps = get_trans_deps ~file_path:!main_file ~seen:[] ?stubs_dir ~in_stubs:false () in
-  match !mode with
-  | "print" -> print_mode !out deps
-  | "merge" -> ignore (merge_mode !out deps)
-  | "build" -> build_mode !out deps
-  | _ -> failwith ("Unknown mode: " ^ !mode)
+  match !main_file with
+  | None ->
+    eprintf "Main CakeML file is required.\n";
+    print_usage ();
+    exit 1
+  | Some main_file -> 
+    let deps = get_trans_deps ~file_path:main_file ~seen:[] ?stubs_dir ~in_stubs:false () in
+    match !mode with
+    | "print" -> print_mode !out deps
+    | "merge" -> ignore (merge_mode !out deps)
+    | "build" -> build_mode !out deps
+    | _ -> failwith ("Unknown mode: " ^ !mode)

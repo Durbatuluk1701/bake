@@ -1,4 +1,22 @@
 (executable
  (public_name bake)
  (name bake)
- (libraries bake logs logs.fmt))
+ (libraries logs logs.fmt)
+ (modules bake basis_c_data))
+
+(rule
+ ; This rule defines how to build the target basis_c_data.ml
+ (target basis_c_data.ml)
+ ; It depends on the source file basis_ffi.c
+ (deps basis_ffi.c)
+ ; The action to perform
+ (action
+  (with-stdout-to
+   %{target}
+   (progn
+    ; Write "let content = {|" to the target file
+    (echo "let content = {|")
+    ; Append the contents of the dependency (basis_ffi.c)
+    (cat %{deps})
+    ; Write the closing "|}"
+    (echo "|}")))))
