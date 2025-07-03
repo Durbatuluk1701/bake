@@ -21,3 +21,8 @@ Print with stubs works as expected
   ./test_infra/stubs/Test_Dep.cml
   ./test_infra/stubs/Test_Stubs.cml
   ./test_infra/test_file.cml
+
+Print with FFI works
+  $ ../bin/bake.exe --mode print ./test_infra/test_file_ffi.cml
+  ./test_infra/test_file_ffi.cml
+  ./test_infra/test_file.c

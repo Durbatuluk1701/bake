@@ -1,4 +1,3 @@
-
 open Printf
 
 let debug_print str =
@@ -66,16 +65,20 @@ let dot_to_slash s =
 let post_proc_module ~dir ~module_ ?stubs_dir ~in_stubs () =
   let root_pattern = "@" in
   let stub_pattern = "$" in
+  let c_pattern = "#" in
   debug_print (sprintf "Processing module '%s' with dir='%s', stubs_dir='%s', in_stubs=%b" module_ dir (Option.value ~default:"<none>" stubs_dir) in_stubs);
   if string_starts_with ~prefix:root_pattern module_ then
-    (dot_to_slash (String.sub module_ 1 (String.length module_ - 1)) ^ ".cml", false)
+    (dot_to_slash (String.sub module_ 1 (String.length module_ - 1)) ^ ".cml", false, false)
   else if string_starts_with ~prefix:stub_pattern module_ then
     match stubs_dir with
     | None -> failwith "Stub directory is required for $-modules."
     | Some sdir ->
-      (Filename.concat sdir (dot_to_slash (String.sub module_ 1 (String.length module_ - 1))) ^ ".cml", true)
+      (Filename.concat sdir (dot_to_slash (String.sub module_ 1 (String.length module_ - 1))) ^ ".cml", true, false)
+  else if string_starts_with ~prefix:c_pattern module_ then
+    (* C dependency *)
+    (Filename.concat dir (String.sub module_ 1 (String.length module_ - 1) ^ ".c"), false, true)
   else
-    (Filename.concat dir (dot_to_slash module_) ^ ".cml", false)
+    (Filename.concat dir (dot_to_slash module_) ^ ".cml", false, false)
 
 let get_direct_deps ~file_path ?parent_dir ?stubs_dir ~in_stubs () =
   debug_print (sprintf "Getting direct deps for %s, with parent_dir=%s, stubs_dir=%s and in_stubs=%b" file_path (Option.value ~default:"<none>" parent_dir) (Option.value ~default:"<none>" stubs_dir) in_stubs);
@@ -99,26 +102,32 @@ let rec get_trans_deps ~file_path ~seen ?stubs_dir ?parent_dir ~in_stubs () =
   let in_stubs = in_stubs || Option.is_some subst in
   let deps_with_flags = get_direct_deps ~file_path:actual_file ?parent_dir ?stubs_dir ~in_stubs () in
   let full_deps = ref [] in
+  let c_deps = ref [] in
   let next_parent_dir = Option.value parent_dir ~default:(Filename.dirname file_path) in
-  List.iter (fun (dep, next_in_stubs) ->
-    if not (List.mem dep seen) && not (List.mem dep !full_deps) then (
+  List.iter (fun (dep, next_in_stubs, is_c_dep) ->
+    if is_c_dep then (
+      if not (List.mem dep !c_deps) then c_deps := dep :: !c_deps
+    ) else if not (List.mem dep seen) && not (List.mem dep !full_deps) then (
       debug_print (sprintf "\tDep: %s was not yet seen" dep);
-      let new_deps = get_trans_deps ~file_path:dep ~seen:(dep :: !full_deps @ seen) ?stubs_dir ~parent_dir:next_parent_dir ~in_stubs:next_in_stubs () in
-      full_deps := !full_deps @ new_deps
+      let new_deps, new_c_deps = get_trans_deps ~file_path:dep ~seen:(dep :: !full_deps @ seen) ?stubs_dir ~parent_dir:next_parent_dir ~in_stubs:next_in_stubs () in
+      full_deps := !full_deps @ new_deps;
+      c_deps := !c_deps @ new_c_deps
     )
   ) deps_with_flags;
-  !full_deps @ [actual_file]
+  (!full_deps @ [actual_file], !c_deps)
 
-let print_mode out_opt deps =
+let print_mode out_opt (deps, c_deps) =
   match out_opt with
   | Some out ->
     let oc = open_out out in
     List.iter (fun dep -> output_string oc (dep ^ "\n")) deps;
+    List.iter (fun cdep -> output_string oc (cdep ^ "\n")) c_deps;
     close_out oc
   | None ->
-    List.iter print_endline deps
+    List.iter print_endline deps;
+    List.iter print_endline c_deps
 
-let merge_mode out_opt deps =
+let merge_mode out_opt (deps, c_deps) =
   match out_opt with
   | None -> failwith "Output file name (--out <file>) is required in 'merge' and 'build' modes."
   | Some out ->
@@ -132,26 +141,29 @@ let merge_mode out_opt deps =
       with End_of_file -> close_in ic; output_string oc "\n\n"
     ) deps;
     close_out oc;
-    out
+    (out, c_deps)
 
-let build_mode out_opt deps =
+let build_mode out_opt (deps, c_deps) : (unit, string) result = 
   let cc = "gcc" in
   let basis_file = get_basis_file () in
   let cc_flags = "-O2 -lm" in
-  let out_file = merge_mode out_opt deps in
-  let asm_file = Filename.chop_suffix out_file ".cml" ^ ".S" in
-  let binary_file = Filename.chop_suffix out_file ".cml" in
-  let cake_cmd = sprintf "cake < %s > %s" out_file asm_file in
-  let gcc_cmd = sprintf "%s %s %s %s -o %s" cc basis_file asm_file cc_flags binary_file in
-  let run_or_fail cmd err =
-    match Sys.command cmd with
-    | 0 -> ()
-    | _ -> failwith err
-  in
-  run_or_fail cake_cmd ("Error during CakeML compilation: " ^ cake_cmd);
-  run_or_fail gcc_cmd ("Error during GCC compilation: " ^ gcc_cmd);
-  Printf.printf "Binary created: %s\n" binary_file
-
+  let out_file, c_deps = merge_mode out_opt (deps, c_deps) in
+  (match Filename.chop_suffix_opt ~suffix:".cml" out_file with
+  | None -> Error "Output file must have a .cml suffix."
+  | Some out_basename -> 
+    (let asm_file = out_basename ^ ".S" in
+    let binary_file = out_basename in
+    let cake_cmd = sprintf "cake < %s > %s" out_file asm_file in
+    let gcc_cmd = sprintf "%s %s %s %s %s -o %s" cc basis_file (String.concat " " c_deps) asm_file cc_flags binary_file in
+    let run_or_fail cmd err =
+      match Sys.command cmd with
+      | 0 -> ()
+      | _ -> failwith err
+    in
+    run_or_fail cake_cmd ("Error during CakeML compilation: " ^ cake_cmd);
+    run_or_fail gcc_cmd ("Error during GCC compilation: " ^ gcc_cmd);
+    Printf.printf "Binary created: %s\n" binary_file;
+    Ok ()))
 
 let () =
   (* Initialize logging *)
@@ -194,9 +206,16 @@ let () =
     print_usage ();
     exit 1
   | Some main_file -> 
-    let deps = get_trans_deps ~file_path:main_file ~seen:[] ?stubs_dir ~in_stubs:false () in
+    let deps, c_deps = get_trans_deps ~file_path:main_file ~seen:[] ?stubs_dir ~in_stubs:false () in
     match !mode with
-    | "print" -> print_mode !out deps
-    | "merge" -> ignore (merge_mode !out deps)
-    | "build" -> build_mode !out deps
+    | "print" -> print_mode !out (deps, c_deps)
+    | "merge" -> ignore (merge_mode !out (deps, c_deps))
+    | "build" -> 
+      (match build_mode !out (deps, c_deps) with
+      | Ok () -> ()
+      | Error err ->
+        eprintf "Build failed: %s\n" err;
+        print_endline "";
+        print_usage ();
+        exit 1)
     | _ -> failwith ("Unknown mode: " ^ !mode)

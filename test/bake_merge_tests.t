@@ -124,4 +124,25 @@ Merge out + stubs works as expected
     end
   
   
- 
+Merge with an FFI file works
+  $ ../bin/bake.exe --mode merge --out ./merged.cml --stubs ./test_infra/stubs ./test_infra/test_file_ffi.cml
+  $ cat merged.cml
+  (* deps: #test_file *)
+  
+  val _ =
+    let 
+      (* FFI type is (ffi : string (input arg) -> byte_array (storage)) *)
+      val dummy1 = "test1"
+      val out_arr = Word8Array.array 32 (Word8.fromInt 0)
+      val _ = #(test_function) dummy1 out_arr
+      (* Get out from out_arr *)
+      val ret_val = Word8Array.substring out_arr 0 (Word8Array.length out_arr)
+      (* Print it out *)
+      val _ = print "Back in Cakeml, we got:\n"
+      val _ = print ret_val
+    in
+      ()
+    end
+  
+  
+
