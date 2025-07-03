@@ -5,6 +5,15 @@
  (modules bake basis_c_data))
 
 (rule
+ (alias cake-vendor)
+ (targets cake basis_ffi.c)
+ (deps
+  (:helper_script flexible_cake_installer.sh)
+  (source_tree vendored_cakeml))
+ (action
+  (run %{helper_script} %{architecture} vendored_cakeml)))
+
+(rule
  ; This rule defines how to build the target basis_c_data.ml
  (target basis_c_data.ml)
  ; It depends on the source file basis_ffi.c
@@ -20,13 +29,6 @@
     (cat %{deps})
     ; Write the closing "|}"
     (echo "|}")))))
-
-(rule
- (alias cake-vendor)
- (targets cake)
- (deps flexible_cake_installer.sh)
- (action
-  (run %{deps} %{architecture})))
 
 (install
  (package bake)
