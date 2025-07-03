@@ -160,22 +160,19 @@ let merge_mode out_opt (deps, c_deps) =
 let build_mode out_opt (deps, c_deps) ~extra_cc_flags : (unit, string) result = 
   let cc = "gcc" in
   let basis_file = get_basis_file () in
-  let default_cc_flags = "-O2 -lm" in
-  let env_cc_flags =
-    match Sys.getenv_opt "BAKE_CC_FLAGS" with
-    | Some s when String.trim s <> "" -> Some s
-    | _ -> None
+  let cc_flags = ref "" in
+  let add_cc_flag flag =
+    match flag with
+    | None -> ()
+    | Some flag ->
+      cc_flags := !cc_flags ^ " " ^ String.trim flag
   in
+  add_cc_flag (Some "-lm"); (* Default library flag *)
+  add_cc_flag (Some "-O2"); (* Default optimization level *)
+  let env_cc_flags = Sys.getenv_opt "BAKE_CC_FLAGS" in
   (* Compose CLI flags first, then env flags, then default *)
-  let cc_flags =
-    let cli = match extra_cc_flags with Some s when String.trim s <> "" -> Some s | _ -> None in
-    let env = env_cc_flags in
-    match (cli, env) with
-    | (Some cli_flags, Some env_flags) -> cli_flags ^ " " ^ env_flags
-    | (Some cli_flags, None) -> cli_flags
-    | (None, Some env_flags) -> env_flags
-    | (None, None) -> default_cc_flags
-  in
+  add_cc_flag extra_cc_flags;
+  add_cc_flag env_cc_flags;
   let out_file, c_deps = merge_mode out_opt (deps, c_deps) in
   (match Filename.chop_suffix_opt ~suffix:".cml" out_file with
   | None -> Error "Output file must have a .cml suffix."
@@ -183,7 +180,7 @@ let build_mode out_opt (deps, c_deps) ~extra_cc_flags : (unit, string) result =
     (let asm_file = out_basename ^ ".S" in
     let binary_file = out_basename in
     let cake_cmd = sprintf "cake < %s > %s" out_file asm_file in
-    let gcc_cmd = sprintf "%s %s %s %s %s -o %s" cc basis_file (String.concat " " c_deps) asm_file cc_flags binary_file in
+    let gcc_cmd = sprintf "%s %s %s %s %s -o %s" cc basis_file (String.concat " " c_deps) asm_file !cc_flags binary_file in
     let run_or_fail cmd err =
       match Sys.command cmd with
       | 0 -> ()
