@@ -127,7 +127,7 @@ Merge out + stubs works as expected
 Merge with an FFI file works
   $ ../bin/bake.exe --mode merge --out ./merged.cml --stubs ./test_infra/stubs ./test_infra/test_file_ffi.cml
   $ cat merged.cml
-  (* deps: #test_file *)
+  (* deps: #nested_stub.test_file *)
   
   val _ =
     let 

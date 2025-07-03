@@ -76,7 +76,14 @@ let post_proc_module ~dir ~module_ ?stubs_dir ~in_stubs () =
       (Filename.concat sdir (dot_to_slash (String.sub module_ 1 (String.length module_ - 1))) ^ ".cml", true, false)
   else if string_starts_with ~prefix:c_pattern module_ then
     (* C dependency *)
-    (Filename.concat dir (String.sub module_ 1 (String.length module_ - 1) ^ ".c"), false, true)
+    (* C dependencies are always presumed to come from the stubs directory *)
+    match stubs_dir with
+    | None -> failwith "Stub directory is required for #-modules."
+    | Some sdir ->
+      (* Remove the leading '#' and replace '.' with '/' *)
+      (* The module name is expected to be in the form "#ModuleName" *)
+      (Filename.concat sdir (dot_to_slash (String.sub module_ 1 (String.length module_ - 1))) ^ ".c", false, true)
+    (* (Filename.concat dir (String.sub module_ 1 (String.length module_ - 1) ^ ".c"), false, true) *)
   else
     (Filename.concat dir (dot_to_slash module_) ^ ".cml", false, false)
 

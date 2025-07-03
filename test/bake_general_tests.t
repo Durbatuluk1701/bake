@@ -8,3 +8,8 @@ Requires input main file
     -help  Display this list of options
     --help  Display this list of options
   [1]
+
+Cannot use C files without stubs
+  $ ../bin/bake.exe --mode print ./test_infra/test_file_ffi.cml
+  Fatal error: exception Failure("Stub directory is required for #-modules.")
+  [2]

@@ -18,7 +18,7 @@ Build out + no stubs works as expected
   rec_fn
 
 Build out with an FFI file
-  $ ../bin/bake.exe --mode build --out ./built.cml ./test_infra/test_file_ffi.cml 2>&1 | sed 's/.*ld: warning: \/tmp\/.\+\.o:/<redacted>/' | sed 's/.*NOTE: This behaviour is deprecated.*/<redacted>/'
+  $ ../bin/bake.exe --mode build --out ./built.cml --stubs ./test_infra/stubs ./test_infra/test_file_ffi.cml 2>&1 | sed 's/.*ld: warning: \/tmp\/.\+\.o:/<redacted>/' | sed 's/.*NOTE: This behaviour is deprecated.*/<redacted>/'
   <redacted> missing .note.GNU-stack section implies executable stack
   <redacted>
   Binary created: ./built

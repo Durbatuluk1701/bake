@@ -1,4 +1,4 @@
-(* deps: #test_file *)
+(* deps: #nested_stub.test_file *)
 
 val _ =
   let 
