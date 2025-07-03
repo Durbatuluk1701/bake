@@ -22,7 +22,7 @@
  (synopsis "Bake - The CakeML Build Tool")
  (description
   "Bake is a build tool for CakeML projects, designed to facilitate the compilation and management of CakeML codebases. In particular, it intends to address the lack of module support in CakeML by allowing dependencies to be specified in comments and then resolved to a monolithic CakeML file that is compiled. It supports various modes of operation including printing dependencies, merging files, and building executables.")
- (depends ocaml)
+ (depends ocaml logs fmt)
  (tags
   ("cakeml" "build")))
 
