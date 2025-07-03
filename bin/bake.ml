@@ -110,15 +110,22 @@ let rec get_trans_deps ~file_path ~seen ?stubs_dir ?parent_dir ~in_stubs () =
   let deps_with_flags = get_direct_deps ~file_path:actual_file ?parent_dir ?stubs_dir ~in_stubs () in
   let full_deps = ref [] in
   let c_deps = ref [] in
+  let c_deps_set = Hashtbl.create 8 in
   let next_parent_dir = Option.value parent_dir ~default:(Filename.dirname file_path) in
+  let add_c_dep cdep =
+    if not (Hashtbl.mem c_deps_set cdep) then (
+      Hashtbl.add c_deps_set cdep ();
+      c_deps := !c_deps @ [cdep]
+    )
+  in
   List.iter (fun (dep, next_in_stubs, is_c_dep) ->
     if is_c_dep then (
-      if not (List.mem dep !c_deps) then c_deps := dep :: !c_deps
+      add_c_dep dep
     ) else if not (List.mem dep seen) && not (List.mem dep !full_deps) then (
       debug_print (sprintf "\tDep: %s was not yet seen" dep);
       let new_deps, new_c_deps = get_trans_deps ~file_path:dep ~seen:(dep :: !full_deps @ seen) ?stubs_dir ~parent_dir:next_parent_dir ~in_stubs:next_in_stubs () in
       full_deps := !full_deps @ new_deps;
-      c_deps := !c_deps @ new_c_deps
+      List.iter add_c_dep new_c_deps
     )
   ) deps_with_flags;
   (!full_deps @ [actual_file], !c_deps)
@@ -150,10 +157,25 @@ let merge_mode out_opt (deps, c_deps) =
     close_out oc;
     (out, c_deps)
 
-let build_mode out_opt (deps, c_deps) : (unit, string) result = 
+let build_mode out_opt (deps, c_deps) ~extra_cc_flags : (unit, string) result = 
   let cc = "gcc" in
   let basis_file = get_basis_file () in
-  let cc_flags = "-O2 -lm" in
+  let default_cc_flags = "-O2 -lm" in
+  let env_cc_flags =
+    match Sys.getenv_opt "BAKE_CC_FLAGS" with
+    | Some s when String.trim s <> "" -> Some s
+    | _ -> None
+  in
+  (* Compose CLI flags first, then env flags, then default *)
+  let cc_flags =
+    let cli = match extra_cc_flags with Some s when String.trim s <> "" -> Some s | _ -> None in
+    let env = env_cc_flags in
+    match (cli, env) with
+    | (Some cli_flags, Some env_flags) -> cli_flags ^ " " ^ env_flags
+    | (Some cli_flags, None) -> cli_flags
+    | (None, Some env_flags) -> env_flags
+    | (None, None) -> default_cc_flags
+  in
   let out_file, c_deps = merge_mode out_opt (deps, c_deps) in
   (match Filename.chop_suffix_opt ~suffix:".cml" out_file with
   | None -> Error "Output file must have a .cml suffix."
@@ -185,12 +207,14 @@ let () =
   (* Default output to current directory *)
   let out = ref None in
   let stubs = ref None in
+  let cc_flags = ref None in
   let speclist = [
     ("--mode", Arg.Symbol (["print"; "merge"; "build"], (fun m -> mode := m)), "Mode of operation: print, merge, build");
     ("--out", Arg.String (fun s -> out := Some s), "Output file name for the monolithic CakeML file");
     ("--stubs", Arg.String (fun s -> stubs := Some s), "Optional folder containing substitute (stub) files");
+    ("--cc-flags", Arg.String (fun s -> cc_flags := Some s), "Additional flags to pass to GCC (overrides BAKE_CC_FLAGS env var)");
   ] in
-  let usage_str = "Usage: bake <main> [--mode print|merge|build] [--out <file>] [--stubs <dir>]" in
+  let usage_str = "Usage: bake <main> [--mode print|merge|build] [--out <file>] [--stubs <dir>] [--cc-flags <flags>]" in
   let print_usage () = Arg.usage speclist usage_str in
   (* Anonymous function to handle the main file argument *)
   (* This is required for processing, so it must be provided *)
@@ -218,7 +242,7 @@ let () =
     | "print" -> print_mode !out (deps, c_deps)
     | "merge" -> ignore (merge_mode !out (deps, c_deps))
     | "build" -> 
-      (match build_mode !out (deps, c_deps) with
+      (match build_mode !out (deps, c_deps) ~extra_cc_flags:!cc_flags with
       | Ok () -> ()
       | Error err ->
         eprintf "Build failed: %s\n" err;
