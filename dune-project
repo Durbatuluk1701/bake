@@ -1,8 +1,8 @@
-(lang dune 3.19)
+(lang dune 3.17)
 
 (name bake)
 
-(version 1.1.0)
+(version 1.1.1)
 
 (generate_opam_files true)
 
