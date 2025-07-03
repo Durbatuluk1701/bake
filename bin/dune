@@ -21,7 +21,14 @@
     ; Write the closing "|}"
     (echo "|}")))))
 
+(rule
+ (alias cake-vendor)
+ (targets cake)
+ (deps flexible_cake_installer.sh)
+ (action
+  (run %{deps} %{architecture})))
+
 (install
  (package bake)
  (section bin)
- (files bake.exe))
+ (files bake.exe cake))
