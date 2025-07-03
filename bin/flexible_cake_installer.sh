@@ -42,7 +42,7 @@ RELEASE_URL="https://github.com/CakeML/cakeml/releases/latest/download/${ASSET}"
 # Download the asset
 echo "Downloading CakeML from $RELEASE_URL..."
 # Hide the output of the curl command
-curl -L -o "$ASSET" "$RELEASE_URL" >/dev/null 2>&1
+curl -L -o "$ASSET" "$RELEASE_URL"
 
 # Unpack the asset
 echo "Unpacking $ASSET..."
