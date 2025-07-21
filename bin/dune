@@ -2,7 +2,14 @@
  (public_name bake)
  (name bake)
  (libraries logs logs.fmt)
- (modules bake basis_c_data))
+ (modules config bake basis_c_data))
+
+(rule
+ (target config.ml)
+ (action
+  (with-stdout-to
+   %{target}
+   (echo "let arch = \"%{architecture}\""))))
 
 (rule
  (alias cake-vendor)
