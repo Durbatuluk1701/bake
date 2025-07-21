@@ -1,7 +1,7 @@
 (executable
  (public_name bake)
  (name bake)
- (libraries logs logs.fmt)
+ (libraries unix logs logs.fmt)
  (modules config bake basis_c_data))
 
 (rule

@@ -157,7 +157,7 @@ let merge_mode out_opt (deps, c_deps) =
     close_out oc;
     (out, c_deps)
 
-let build_mode out_opt (deps, c_deps) ~extra_cc_flags : (unit, string) result = 
+let build_mode out_opt (deps, c_deps) ~extra_cc_flags ~c_libraries : (unit, string) result =
   let cc = "cc" in
   let basis_file = get_basis_file () in
   let cc_flags = ref "" in
@@ -173,6 +173,22 @@ let build_mode out_opt (deps, c_deps) ~extra_cc_flags : (unit, string) result =
   (* Compose CLI flags first, then env flags, then default *)
   add_flag cc_flags extra_cc_flags;
   add_flag cc_flags env_cc_flags;
+  (* Add pkg-config flags for c_libraries *)
+  let pkg_config_flags =
+    match c_libraries with
+    | None -> ""
+    | Some libs when libs = "" -> ""
+    | Some libs ->
+      let libs_list = String.split_on_char ',' libs |> List.map String.trim |> List.filter ((<>) "") in
+      if libs_list = [] then ""
+      else
+        let pkg_cmd = "pkg-config --cflags --libs " ^ (String.concat " " libs_list) in
+        let ic = Unix.open_process_in pkg_cmd in
+        let flags = try input_line ic with End_of_file -> "" in
+        ignore (Unix.close_process_in ic);
+        flags
+  in
+  add_flag cc_flags (Some pkg_config_flags);
   (* CakeML Flags *)
   let cake_flags = ref "" in
   (* If we are on an arm architecture, add a 
@@ -184,7 +200,7 @@ let build_mode out_opt (deps, c_deps) ~extra_cc_flags : (unit, string) result =
   let out_file, c_deps = merge_mode out_opt (deps, c_deps) in
   (match Filename.chop_suffix_opt ~suffix:".cml" out_file with
   | None -> Error "Output file must have a .cml suffix."
-  | Some out_basename -> 
+  | Some out_basename ->
     (let asm_file = out_basename ^ ".S" in
     let binary_file = out_basename in
     let cake_cmd = sprintf "cake %s < %s > %s" !cake_flags out_file asm_file in
@@ -213,13 +229,15 @@ let () =
   let out = ref None in
   let stubs = ref None in
   let cc_flags = ref None in
+  let c_libraries = ref None in
   let speclist = [
     ("--mode", Arg.Symbol (["print"; "merge"; "build"], (fun m -> mode := m)), "Mode of operation: print, merge, build");
     ("--out", Arg.String (fun s -> out := Some s), "Output file name for the monolithic CakeML file");
     ("--stubs", Arg.String (fun s -> stubs := Some s), "Optional folder containing substitute (stub) files");
     ("--cc-flags", Arg.String (fun s -> cc_flags := Some s), "Additional flags to pass to CC (overrides BAKE_CC_FLAGS env var)");
+    ("--c-libraries", Arg.String (fun s -> c_libraries := Some s), "Comma-separated list of C libraries to link using pkg-config");
   ] in
-  let usage_str = "Usage: bake <main> [--mode print|merge|build] [--out <file>] [--stubs <dir>] [--cc-flags <flags>]" in
+  let usage_str = "Usage: bake <main> [--mode print|merge|build] [--out <file>] [--stubs <dir>] [--cc-flags <flags>] [--c-libraries <lib1,lib2,...>]" in
   let print_usage () = Arg.usage speclist usage_str in
   (* Anonymous function to handle the main file argument *)
   (* This is required for processing, so it must be provided *)
@@ -246,8 +264,8 @@ let () =
     match !mode with
     | "print" -> print_mode !out (deps, c_deps)
     | "merge" -> ignore (merge_mode !out (deps, c_deps))
-    | "build" -> 
-      (match build_mode !out (deps, c_deps) ~extra_cc_flags:!cc_flags with
+    | "build" ->
+      (match build_mode !out (deps, c_deps) ~extra_cc_flags:!cc_flags ~c_libraries:!c_libraries with
       | Ok () -> ()
       | Error err ->
         eprintf "Build failed: %s\n" err;
