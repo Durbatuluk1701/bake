@@ -158,7 +158,7 @@ let merge_mode out_opt (deps, c_deps) =
     (out, c_deps)
 
 let build_mode out_opt (deps, c_deps) ~extra_cc_flags : (unit, string) result = 
-  let cc = "gcc" in
+  let cc = "cc" in
   let basis_file = get_basis_file () in
   let cc_flags = ref "" in
   let add_cc_flag flag =
@@ -180,14 +180,14 @@ let build_mode out_opt (deps, c_deps) ~extra_cc_flags : (unit, string) result =
     (let asm_file = out_basename ^ ".S" in
     let binary_file = out_basename in
     let cake_cmd = sprintf "cake < %s > %s" out_file asm_file in
-    let gcc_cmd = sprintf "%s %s %s %s %s -o %s" cc basis_file (String.concat " " c_deps) asm_file !cc_flags binary_file in
+    let cc_cmd = sprintf "%s %s %s %s %s -o %s" cc basis_file (String.concat " " c_deps) asm_file !cc_flags binary_file in
     let run_or_fail cmd err =
       match Sys.command cmd with
       | 0 -> ()
       | _ -> failwith err
     in
     run_or_fail cake_cmd ("Error during CakeML compilation: " ^ cake_cmd);
-    run_or_fail gcc_cmd ("Error during GCC compilation: " ^ gcc_cmd);
+    run_or_fail cc_cmd ("Error during CC compilation: " ^ cc_cmd);
     Printf.printf "Binary created: %s\n" binary_file;
     Ok ()))
 
@@ -209,7 +209,7 @@ let () =
     ("--mode", Arg.Symbol (["print"; "merge"; "build"], (fun m -> mode := m)), "Mode of operation: print, merge, build");
     ("--out", Arg.String (fun s -> out := Some s), "Output file name for the monolithic CakeML file");
     ("--stubs", Arg.String (fun s -> stubs := Some s), "Optional folder containing substitute (stub) files");
-    ("--cc-flags", Arg.String (fun s -> cc_flags := Some s), "Additional flags to pass to GCC (overrides BAKE_CC_FLAGS env var)");
+    ("--cc-flags", Arg.String (fun s -> cc_flags := Some s), "Additional flags to pass to CC (overrides BAKE_CC_FLAGS env var)");
   ] in
   let usage_str = "Usage: bake <main> [--mode print|merge|build] [--out <file>] [--stubs <dir>] [--cc-flags <flags>]" in
   let print_usage () = Arg.usage speclist usage_str in

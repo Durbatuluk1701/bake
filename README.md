@@ -30,7 +30,7 @@ Bake supports three main modes, controlled by the `--mode` argument:
 
 - `--mode print`: Resolves and prints the full dependency list for a given `.cml` file. Output can be redirected to a file with `--out <file>`.
 - `--mode merge`: Resolves dependencies and merges all required `.cml` files into a single monolithic file (specified by `--out <file>`).
-- `--mode build`: Merges dependencies, compiles the result with the CakeML compiler (`cake`), and then compiles the output to a native executable using `gcc`.
+- `--mode build`: Merges dependencies, compiles the result with the CakeML compiler (`cake`), and then compiles the output to a native executable using `cc`.
 
 ## Usage
 
@@ -45,7 +45,7 @@ bake <main.cml> [--mode print|merge|build] [--out <file>] [--stubs <dir>]
 
 ## Quirks and Notes
 
-- The tool assumes your C compiler is `gcc`, the basis file is `basis_ffi.c`, and uses the flags `-O2 -lm`.
+- The tool assumes your C compiler is `cc`, the basis file is `basis_ffi.c`, and uses the flags `-O2 -lm`.
 - There is currently no cleaning functionality.
 - The `--out` argument specifies the output monolithic CakeML file; in `build` mode, the executable will be named after the output file (without the `.cml` extension).
 - Stub file substitution is supported for files ending in `_Stubs.cml` or `_Axioms.cml` via the `--stubs` option or the `CAKEML_STUBS` environment variable.

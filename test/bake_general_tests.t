@@ -5,7 +5,7 @@ Requires input main file
     --mode {print|merge|build}Mode of operation: print, merge, build
     --out Output file name for the monolithic CakeML file
     --stubs Optional folder containing substitute (stub) files
-    --cc-flags Additional flags to pass to GCC (overrides BAKE_CC_FLAGS env var)
+    --cc-flags Additional flags to pass to CC (overrides BAKE_CC_FLAGS env var)
     -help  Display this list of options
     --help  Display this list of options
   [1]
