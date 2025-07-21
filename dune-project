@@ -2,7 +2,7 @@
 
 (name bake)
 
-(version 1.3.1)
+(version 1.4.0)
 
 (generate_opam_files true)
 
